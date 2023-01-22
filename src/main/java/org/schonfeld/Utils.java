@@ -39,4 +39,16 @@ public class Utils {
                 return date.plus(1, ChronoUnit.DAYS);
         }
     }
+
+    public static LocalDate subtractDaysSkippingWeekends(LocalDate date, long days) {
+        LocalDate result = date;
+        long subtractedDays = 0;
+        while (subtractedDays < days-1) {
+            result = result.minusDays(1);
+            if (!(result.getDayOfWeek() == DayOfWeek.SATURDAY || result.getDayOfWeek() == DayOfWeek.SUNDAY)) {
+                ++subtractedDays;
+            }
+        }
+        return result;
+    }
 }
