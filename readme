@@ -1,1 +1,22 @@
-for schonfeld
+I used maven to build this project. Used mvn clean install to build the project
+Application is the main program which takes the csv file as input
+In the problem statement, it says input is an array of data. But since I have the data in csv file,
+I am passing the .csv file as input to the application.
+CSVParser, parses and stores into CSVRecord
+BetaCalculationEngine, reads the processes the csv records and stores it in cache. calculateBeta function
+can be called to calculate beta for stock
+HelperUtils has methods to calculate beta of stock, compute covariance and variance
+
+I used Map of Map to store the data. I used map since it is a O(1) lookup. This is a read heavy application.
+If the input data is too big in the future, map can be changed to concurrentHashmap and we can split the
+input csv file into chunks and have multiple threads process the data
+
+Few assumptions
+
+On the first day, I am storing daily return as 0 (I don't know what the daily return on the first day should be)
+I am also assuming this market data will be present for all tickers during business days.
+
+While processing the input file, I am computing the daily return and storing it for faster look up
+during computation.
+
+test folder contains some junits to test the code
