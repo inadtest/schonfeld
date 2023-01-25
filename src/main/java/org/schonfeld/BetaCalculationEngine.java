@@ -37,11 +37,11 @@ public class BetaCalculationEngine {
                                   String startDate,
                                   String endDate,
                                   Long betaDurationDays) {
-        LocalDate sDate = LocalDate.parse(startDate, formatter);
-        LocalDate eDate = LocalDate.parse(endDate, formatter);
+        LocalDate startLocalDate = LocalDate.parse(startDate, formatter);
+        LocalDate endLocalDate = LocalDate.parse(endDate, formatter);
         Double[] beta = new Double[0];
         try {
-            beta = HelperUtils.calculateBeta(getStockCache(), ticker, tickerBaseLine, sDate, eDate, betaDurationDays);
+            beta = HelperUtils.calculateBeta(getStockCache(), ticker, tickerBaseLine, startLocalDate, endLocalDate, betaDurationDays);
             return beta;
         } catch (Exception e) {
             System.out.println("Exception occurred when calculating beta");
@@ -50,43 +50,35 @@ public class BetaCalculationEngine {
         return beta;
     }
 
-    void process(List<CSVRecord> recs) {
-        LocalDate prevDate;
-        for (CSVRecord r : recs) {
-            if (stockCache.containsKey(String.valueOf(r.get(1)))) {
-                TreeMap<LocalDate, MarketData> s = stockCache.get(r.get(1));
-                LocalDate date = LocalDate.parse(r.get(0), ofPattern("M/d/yyyy"));
-                prevDate = date.minusDays(1L);
-                if(!s.containsKey(prevDate)) {
-                    while(!s.containsKey(prevDate))
-                        prevDate = prevDate.minusDays(1L);
-                }
-                //LocalDate prevDate = DateUtils.getPreviousWorkingDay(date);
+    void process(List<CSVRecord> csvRecords) {
+        for (CSVRecord csvRecord : csvRecords) {
+            if (stockCache.containsKey(String.valueOf(csvRecord.get("Ticker")))) {
+                TreeMap<LocalDate, MarketData> marketData = stockCache.get(csvRecord.get("Ticker"));
+                LocalDate date = LocalDate.parse(csvRecord.get("Date"), ofPattern("M/d/yyyy"));
+                LocalDate previousDate = marketData.lowerKey(date);
                 Double dailyReturn = 0D;
 
-                if (s.containsKey(prevDate)) {
-                    MarketData pData = s.get(prevDate);
-                    if (pData.getClosePrice() > 0)
-                        dailyReturn = calculateDailyReturn(Double.parseDouble(r.get(2)),
-                                                            pData.getClosePrice());
+                if (previousDate != null) {
+                    MarketData previousDateMarketData = marketData.get(previousDate);
+                    if (previousDateMarketData.getClosePrice() > 0)
+                        dailyReturn = calculateDailyReturn(Double.parseDouble(csvRecord.get("ClosePrice")),
+                                                            previousDateMarketData.getClosePrice());
                 }
-                s.put(LocalDate.parse(r.get(0), formatter), new MarketData(Double.valueOf(r.get(2)),
+                marketData.put(LocalDate.parse(csvRecord.get("Date"), formatter), new MarketData(Double.valueOf(csvRecord.get("ClosePrice")),
                                                                             dailyReturn));
-                stockCache.put(r.get("Ticker"), s);
+                stockCache.put(csvRecord.get("Ticker"), marketData);
 
             } else {
-                TreeMap<LocalDate, MarketData> s = new TreeMap<>();
-                s.put(LocalDate.parse(r.get(0), formatter), new MarketData(Double.valueOf(r.get("ClosePrice")), 0D));
-                stockCache.put(r.get("Ticker"), s);
-               // prevDate = LocalDate.parse(r.get(0), formatter);
-
+                TreeMap<LocalDate, MarketData> tempMarketData = new TreeMap<>();
+                tempMarketData.put(LocalDate.parse(csvRecord.get("Date"), formatter), new MarketData(Double.valueOf(csvRecord.get("ClosePrice")), 0D));
+                stockCache.put(csvRecord.get("Ticker"), tempMarketData);
             }
         }
     }
 
-    private double calculateDailyReturn(Double tPrice, Double yPrice) {
-        Double val = 1 + ((tPrice - yPrice) / yPrice);
-        return Math.log(val);
+    private double calculateDailyReturn(Double todayPrice, Double yesterdayPrice) {
+        Double value = 1 + ((todayPrice - yesterdayPrice) / yesterdayPrice);
+        return Math.log(value);
     }
 
 }

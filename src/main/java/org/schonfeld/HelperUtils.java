@@ -10,119 +10,100 @@ import java.util.TreeMap;
 public class HelperUtils {
     private static final DecimalFormat df = new DecimalFormat("0.0000");
 
-    public static Double[] calculateBeta(Map<String, TreeMap<LocalDate, MarketData>> stockMap, String ticker, String indexTicker, LocalDate sDate, LocalDate eDate, long betaDays) throws Exception {
+    public static Double[] calculateBeta(Map<String, TreeMap<LocalDate, MarketData>> stockMap,
+                                         String ticker,
+                                         String baselineTicker,
+                                         LocalDate startDate,
+                                         LocalDate endDate,
+                                         long betaDurationDays) throws Exception {
         List<Double> covariance = new ArrayList<>();
         List<Double> variance = new ArrayList<>();
         List<Double> beta = new ArrayList<>();
         int index = 0;
-        if(stockMap.containsKey(ticker) && stockMap.containsKey(indexTicker)) {
-            for(LocalDate date = sDate; date.isBefore(eDate) || date.isEqual(eDate); date = date.plusDays(1L)) {
-                if(stockMap.containsKey(ticker) && stockMap.containsKey(indexTicker)) {
-                    covariance.add(calculateCovarianceForBetaDurationDays(stockMap, ticker, indexTicker, date, betaDays));
-                    variance.add(calcVarianceForBetaDurationDays(stockMap, indexTicker, date, betaDays));
-                    beta.add(Double.valueOf(df.format(covariance.get(index)/variance.get(index))));
-                    index++;
-                } else {
-                    throw new Exception("ticker or indexticker not found in the input data");
-                }
+        if(stockMap.containsKey(ticker) && stockMap.containsKey(baselineTicker)) {
+            TreeMap<LocalDate, MarketData> marketData = stockMap.get(ticker);
+            for(LocalDate date = startDate; date.isBefore(endDate) || date.isEqual(endDate); date = marketData.higherKey(date)) {
+                Double tickerAverage = calculateAverage(stockMap, ticker, date, betaDurationDays);
+                Double baselineTickerAverage = calculateAverage(stockMap, baselineTicker, date, betaDurationDays);
+                covariance.add(calculateCovarianceForBetaDurationDays(stockMap, ticker, baselineTicker, date, betaDurationDays, tickerAverage, baselineTickerAverage));
+                variance.add(calcVarianceForBetaDurationDays(stockMap, baselineTicker, date, betaDurationDays, baselineTickerAverage));
+                beta.add(Double.valueOf(df.format(covariance.get(index)/variance.get(index))));
+                index++;
             }
+        } else {
+            throw new Exception("ticker or baselineTicker not found in the input data");
         }
         Double[] arr = new Double[beta.size()];
         arr = beta.toArray(arr);
         return arr;
     }
 
-    public static Double calculateCovarianceForBetaDurationDays(Map<String, TreeMap<LocalDate, MarketData>> stockMap, String ticker, String indexTicker, LocalDate date, long betaDurationDays) {
-            long betaDays = betaDurationDays;
-            long index = 1L;
-            Double tickerAvg;
-            Double idxTickerAvg;
-            Double tickerDailyReturn;
-            Double indexDailyReturn;
-            Double tickerSum = 0D;
-            Double indexTickerSum = 0D;
-            Double covariance = 0D;
+    public static Double calculateCovarianceForBetaDurationDays(Map<String, TreeMap<LocalDate, MarketData>> stockMap,
+                                                                String ticker,
+                                                                String baselineTicker,
+                                                                LocalDate date,
+                                                                long betaDurationDays,
+                                                                double tickerAverage,
+                                                                double baselineTickerAverage) {
+        long sampleSize = 0L;
+        double tickerDailyReturn;
+        double tickerBaselineDailyReturn;
+        double covariance = 0D;
+        LocalDate currentDate = date;
+        TreeMap<LocalDate, MarketData> tickerMap = stockMap.get(ticker);
+        TreeMap<LocalDate, MarketData> baselineTickerMap = stockMap.get(baselineTicker);
 
-            LocalDate cDate = date;
-            TreeMap<LocalDate, MarketData> tickerMap = stockMap.get(ticker);
-            TreeMap<LocalDate, MarketData> idxTickerMap = stockMap.get(indexTicker);
-
-            while(betaDays > 0 && index <= betaDays) {
-                if(tickerMap.containsKey(cDate) && idxTickerMap.containsKey(cDate)) {
-                    MarketData tickerData = tickerMap.get(cDate);
-                    MarketData indexData = idxTickerMap.get(cDate);
-                    tickerDailyReturn = tickerData.getDailyReturn();
-                    indexDailyReturn = indexData.getDailyReturn();
-                    tickerSum += tickerData.getClosePrice();
-                    tickerAvg = tickerSum/index;
-                    indexTickerSum += indexData.getClosePrice();
-                    idxTickerAvg = indexTickerSum/index;
-                    covariance += (tickerDailyReturn - tickerAvg) * (indexDailyReturn - idxTickerAvg);
-
-                } else if(!tickerMap.containsKey(cDate) && cDate.isAfter(tickerMap.firstKey())) {
-                    // skips if the date before is not in the map
-                    while(!tickerMap.containsKey(cDate) && cDate.isAfter(tickerMap.firstKey())) {
-                        cDate = cDate.minusDays(1L);
-
-                    }
-                    continue;
-                } else if(cDate.isBefore(tickerMap.firstKey())) {
-                    // decreasing by 2 because index was already incremented but the date is not in the map
-                    if(index > 2)
-                        return covariance / (index - 2);
-                    else {
-                        if(index == 0 || index == 1 || index == 2)
-                            return covariance;
-                    }
-                }
-                index++;
-                cDate = cDate.minusDays(1L);
-            }
-
-        if (index == 0 || index == 1 || index == 2)
-            return covariance;
-        else
-            return covariance/(index-2);
-
+        while(currentDate != null && betaDurationDays > 0 && sampleSize <= betaDurationDays) {
+            MarketData tickerData = tickerMap.get(currentDate);
+            MarketData baselineTickerData = baselineTickerMap.get(currentDate);
+            tickerDailyReturn = tickerData.getDailyReturn();
+            tickerBaselineDailyReturn = baselineTickerData.getDailyReturn();
+            covariance += (tickerDailyReturn - tickerAverage) * (tickerBaselineDailyReturn - baselineTickerAverage);
+            sampleSize++;
+            currentDate = tickerMap.lowerKey(currentDate);
+        }
+        return (sampleSize == 1) ? covariance : covariance/(sampleSize - 1);
     }
 
 
-    public static Double calcVarianceForBetaDurationDays(Map<String, TreeMap<LocalDate, MarketData>> stockMap, String ticker, LocalDate date, long betaDurationDays) {
-        long betaDays = betaDurationDays;
-        long index = 1L;
-        Double avg;
-        Double sum = 0D;
-        Double variance = 0D;
-        Double dReturn;
+    public static Double calcVarianceForBetaDurationDays(Map<String, TreeMap<LocalDate, MarketData>> stockMap,
+                                                         String ticker,
+                                                         LocalDate date,
+                                                         long betaDurationDays,
+                                                         double baselineTickerAverage) {
+        long sampleSize = 1L;
+        double variance = 0D;
+        double dReturn;
         LocalDate cDate = date;
         TreeMap<LocalDate, MarketData> sMap = stockMap.get(ticker);
 
-        while(betaDays > 0 && index <= betaDays) {
+        while(cDate != null && betaDurationDays > 0 && sampleSize <= betaDurationDays) {
             if(sMap.containsKey(cDate)) {
                 MarketData sData = sMap.get(cDate);
                 dReturn = sData.getDailyReturn();
-                sum += sData.getClosePrice();
-                avg = sum/index;
-                variance += (dReturn - avg) * (dReturn - avg);
-
-            } else if(!sMap.containsKey(cDate) && cDate.isAfter(sMap.firstKey())) {
-                // skips if the date before is not in the map
-                while(!sMap.containsKey(cDate) && cDate.isAfter(sMap.firstKey()) )
-                    cDate = cDate.minusDays(1L);
-                continue;
-            } else if(cDate.isBefore(sMap.firstKey())) {
-                if (index == 0 || index == 1 || index == 2)
-                    return variance;
-                else
-                    return variance/(index-2);
+                variance += (dReturn - baselineTickerAverage) * (dReturn - baselineTickerAverage);
             }
-            index++;
-            cDate = cDate.minusDays(1L);
+            sampleSize++;
+            cDate = sMap.lowerKey(cDate);
         }
-        if (index == 0 || index == 1 || index == 2)
-            return variance;
-        else
-            return variance/(index-2);
+        return (sampleSize == 1) ? variance : variance/(sampleSize - 1);
+    }
 
+    public static Double calculateAverage(Map<String, TreeMap<LocalDate, MarketData>> tickerMap,
+                                          String ticker,
+                                          LocalDate date,
+                                          long betaDurationDays) {
+        LocalDate currentDate = date;
+        long sampleSize = 0L;
+        Double tickerSum = 0D;
+        TreeMap<LocalDate, MarketData> stockData = tickerMap.get(ticker);
+
+        while(currentDate != null && betaDurationDays > 0 && sampleSize <= betaDurationDays) {
+            MarketData tickerData = stockData.get(currentDate);
+            tickerSum += tickerData.getClosePrice();
+            sampleSize++;
+            currentDate = stockData.lowerKey(currentDate);
+        }
+        return sampleSize > 0? tickerSum/sampleSize : 0;
     }
 }

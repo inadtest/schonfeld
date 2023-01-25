@@ -24,7 +24,7 @@ public class HelperUtilsTest {
         Map<String, TreeMap<LocalDate, MarketData>> cache = underTest.getStockCache();
 
         //then
-        assertEquals(HelperUtils.calculateCovarianceForBetaDurationDays(cache, "F", "SPY",date,5L), 2550.216731509954);
+        assertEquals(HelperUtils.calculateCovarianceForBetaDurationDays(cache, "F", "SPY",date,5L, 196.86675625, 9.7053705), 2547.3772535655353);
     }
 
     @Test
@@ -36,7 +36,19 @@ public class HelperUtilsTest {
         Map<String, TreeMap<LocalDate, MarketData>> cache = underTest.getStockCache();
 
         //then
-        assertEquals(HelperUtils.calcVarianceForBetaDurationDays(cache, "SPY",date,5L), 51842.9031740696);
+        assertEquals(HelperUtils.calcVarianceForBetaDurationDays(cache, "SPY",date,5L, 196.86675625), 38756.223939664786);
     }
 
+    @Test
+    void shouldCalculateAverage() {
+        //given
+        LocalDate date = LocalDate.parse("9/28/2016", formatter);
+
+        //when
+        Map<String, TreeMap<LocalDate, MarketData>> cache = underTest.getStockCache();
+
+        //then
+        assertEquals(HelperUtils.calculateAverage(cache, "SPY", date, 5L), 196.86675625);
+        assertEquals(HelperUtils.calculateAverage(cache, "F", date, 5L), 9.7053705);
+    }
 }
